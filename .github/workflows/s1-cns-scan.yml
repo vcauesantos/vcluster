@@ -18,10 +18,15 @@ concurrency:
 
 jobs:
   s1-shift-left-cli:
-    name: Scan pull request
+    name: SentinelOne scans (advisory)
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      secret-outcome: ${{ steps.secret-detector.outcome }}
+      iac-outcome: ${{ steps.iac-scanner.outcome }}
+      source-vuln-outcome: ${{ steps.vuln-scanner.outcome }}
+      image-vuln-outcome: ${{ steps.image-vuln-scanner.outcome }}
     container:
       image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06 # 1.0.4
       options: --entrypoint ""
@@ -96,14 +101,6 @@ jobs:
           s1-cns-cli scan vuln
           --docker-image "$TARGET_IMAGE"
 
-      - name: Check for failures
-        if: >-
-          steps.secret-detector.outcome == 'failure' ||
-          steps.iac-scanner.outcome == 'failure' ||
-          steps.vuln-scanner.outcome == 'failure' ||
-          steps.image-vuln-scanner.outcome == 'failure'
-        run: exit 1
-
   snyk-container-scan:
     name: Snyk container image scan
     if: github.event.pull_request.draft == false
@@ -111,6 +108,14 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      scan-outcome: ${{ steps.snyk-scan.outcome }}
+      scanner-error: ${{ steps.snyk-scan.outputs.scanner-error }}
+      has-vulnerabilities: ${{ steps.snyk-scan.outputs.has-vulnerabilities }}
+      critical-count: ${{ steps.snyk-scan.outputs.critical-count }}
+      high-count: ${{ steps.snyk-scan.outputs.high-count }}
+      medium-count: ${{ steps.snyk-scan.outputs.medium-count }}
+      low-count: ${{ steps.snyk-scan.outputs.low-count }}
 
     steps:
       - name: Scan container image with Snyk
@@ -122,3 +127,45 @@ jobs:
           block-on-findings: false
           notify: false
           scanner-token: ${{ secrets.SNYK_TOKEN }}
+
+  consolidate-results:
+    name: Consolidated scan summary
+    if: always()
+    needs: [s1-shift-left-cli, snyk-container-scan]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Write comparison summary
+        env:
+          SUMMARY: |
+            # Security scan comparison
+
+            Image: `${{ env.TARGET_IMAGE }}`
+
+            ## Scanner execution
+
+            | Scanner | Scope | CLI outcome |
+            |---------|-------|-------------|
+            | SentinelOne | Secrets | `${{ needs.s1-shift-left-cli.outputs.secret-outcome || needs.s1-shift-left-cli.result }}` |
+            | SentinelOne | IaC | `${{ needs.s1-shift-left-cli.outputs.iac-outcome || needs.s1-shift-left-cli.result }}` |
+            | SentinelOne | Source dependencies | `${{ needs.s1-shift-left-cli.outputs.source-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.source-vuln-outcome || needs.s1-shift-left-cli.result }}` |
+            | SentinelOne | Container image | `${{ needs.s1-shift-left-cli.outputs.image-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.image-vuln-outcome || needs.s1-shift-left-cli.result }}` |
+            | Snyk | Container image | `${{ needs.snyk-container-scan.outputs.scan-outcome || needs.snyk-container-scan.result }}` |
+            | Snyk | Scanner error | `${{ needs.snyk-container-scan.outputs.scanner-error || 'n/a' }}` |
+            | Snyk | Findings at threshold | `${{ needs.snyk-container-scan.outputs.has-vulnerabilities || 'n/a' }}` |
+
+            ## Snyk container findings
+
+            | Severity | Count |
+            |----------|-------|
+            | Critical | ${{ needs.snyk-container-scan.outputs.critical-count || 'n/a' }} |
+            | High | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} |
+            | Medium | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} |
+            | Low | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} |
+
+            SentinelOne returns a non-zero exit code when some scanners find issues. CLI
+            outcomes do not represent finding counts and are advisory for this POV. See the
+            individual job logs and SentinelOne console for the detailed findings.
+        run: printf '%s\n' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
