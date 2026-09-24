@@ -36,11 +36,13 @@ case "${FAKE_MEND_RESULT:-findings}" in
       exit 0
     fi
     cat <<'EOF'
+Detected 5 Vulnerabilities (CRITICAL: 1, HIGH: 2, MEDIUM: 1, LOW: 0, UNKNOWN: 1)
 | Library             | Severity | Installed Version | Fixed Version | Details          |
 | stdlib              | Critical | 1.0               | 1.1           | CVE-0001         |
 | github.com/acme/a   | High     | 1.0               | 1.1           | CVE-0002         |
 | zlib                | High     | 1.0               | 1.1           | CVE-0003         |
 | busybox             | Medium   | 1.0               | 1.1           | CVE-0004         |
+| github.com/acme/b   |          | 1.0               | 1.1           | GHSA-0005        |
 Scan completed
 EOF
     exit 0

@@ -26,7 +26,8 @@ teardown() {
   grep -qx 'high-count=2' "$GITHUB_OUTPUT"
   grep -qx 'medium-count=1' "$GITHUB_OUTPUT"
   grep -qx 'low-count=0' "$GITHUB_OUTPUT"
-  grep -qx 'total-count=4' "$GITHUB_OUTPUT"
+  grep -qx 'unknown-count=1' "$GITHUB_OUTPUT"
+  grep -qx 'total-count=5' "$GITHUB_OUTPUT"
 }
 
 @test "preserves Mend scanner errors without publishing partial counts" {
@@ -41,5 +42,6 @@ teardown() {
   grep -qx 'high-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'medium-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'low-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'unknown-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'total-count=n/a' "$GITHUB_OUTPUT"
 }

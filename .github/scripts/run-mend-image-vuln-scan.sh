@@ -27,22 +27,49 @@ if [ "$scanner_exit_code" -eq 0 ]; then
 
   awk -F '|' '
     {
+      summary=tolower($0)
+      if (summary ~ /^detected [0-9]+ vulnerabilities /) {
+        gsub(/[(),:]/, " ", summary)
+        word_count=split(summary, words, /[[:space:]]+/)
+        for (word = 1; word <= word_count; word++) {
+          if (words[word] == "detected") {
+            summary_total=words[word + 1]
+          } else if (words[word] == "critical" || words[word] == "high" ||
+                     words[word] == "medium" || words[word] == "low" ||
+                     words[word] == "unknown") {
+            summary_counts[words[word]]=words[word + 1]
+          }
+        }
+        found_summary=1
+      }
+
       for (field = 1; field <= NF; field++) {
         value=$field
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
         value=tolower(value)
         if (value == "critical" || value == "high" || value == "medium" || value == "low") {
-          counts[value]++
+          table_counts[value]++
           break
         }
       }
     }
     END {
-      total=counts["critical"] + counts["high"] + counts["medium"] + counts["low"]
+      if (found_summary) {
+        total=summary_total
+        for (severity in summary_counts) {
+          counts[severity]=summary_counts[severity]
+        }
+      } else {
+        total=table_counts["critical"] + table_counts["high"] + table_counts["medium"] + table_counts["low"]
+        for (severity in table_counts) {
+          counts[severity]=table_counts[severity]
+        }
+      }
       printf "critical-count=%d\n", counts["critical"]
       printf "high-count=%d\n", counts["high"]
       printf "medium-count=%d\n", counts["medium"]
       printf "low-count=%d\n", counts["low"]
+      printf "unknown-count=%d\n", counts["unknown"]
       printf "total-count=%d\n", total
     }
   ' "$scan_log" >> "$GITHUB_OUTPUT"
@@ -57,6 +84,7 @@ fi
   echo "high-count=n/a"
   echo "medium-count=n/a"
   echo "low-count=n/a"
+  echo "unknown-count=n/a"
   echo "total-count=n/a"
 } >> "$GITHUB_OUTPUT"
 

@@ -153,6 +153,7 @@ jobs:
       high-count: ${{ steps.mend-scan.outputs.high-count }}
       medium-count: ${{ steps.mend-scan.outputs.medium-count }}
       low-count: ${{ steps.mend-scan.outputs.low-count }}
+      unknown-count: ${{ steps.mend-scan.outputs.unknown-count }}
       total-count: ${{ steps.mend-scan.outputs.total-count }}
 
     steps:
@@ -229,6 +230,7 @@ jobs:
             | High | ${{ needs.s1-shift-left-cli.outputs.image-high-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.high-count || 'n/a' }} |
             | Medium | ${{ needs.s1-shift-left-cli.outputs.image-medium-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.medium-count || 'n/a' }} |
             | Low | ${{ needs.s1-shift-left-cli.outputs.image-low-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.low-count || 'n/a' }} |
+            | Unknown | n/a | n/a | ${{ needs.mend-container-scan.outputs.unknown-count || 'n/a' }} |
             | **Total** | **${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }}** | **${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }}** | **${{ needs.mend-container-scan.outputs.total-count || 'n/a' }}** |
 
             See the individual job logs, SentinelOne console, and Mend UI for scanner-specific details.
