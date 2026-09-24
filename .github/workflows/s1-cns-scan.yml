@@ -90,7 +90,7 @@ jobs:
         id: image-vuln-scanner
         continue-on-error: true
         env:
-          CONTAINER_IMAGE: ghcr.io/loft-sh/vcluster-oss:sha256-7327a764bbb077df8efe7500196aad3c4488ab5e5c05b327d240430baa3acf52
+          CONTAINER_IMAGE: ghcr.io/loft-sh/vcluster-oss@sha256:7327a764bbb077df8efe7500196aad3c4488ab5e5c05b327d240430baa3acf52
         run: >-
           s1-cns-cli scan vuln
           --docker-image "$CONTAINER_IMAGE"
