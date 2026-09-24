@@ -13,18 +13,28 @@ for argument in "$@"; do
 done
 
 report_file=""
+report_format=""
 previous=""
 for argument in "$@"; do
   if [ "$previous" = "--filename" ]; then
     report_file="$argument"
+  fi
+  if [ "$previous" = "--format" ]; then
+    report_format="$argument"
   fi
   previous="$argument"
 done
 
 case "${FAKE_MEND_RESULT:-findings}" in
   findings)
-    : "${report_file:?--filename is required}"
-    printf '{}\n' > "$report_file"
+    if [ -n "$report_file" ]; then
+      printf '{}\n' > "$report_file"
+      exit 0
+    fi
+    if [ "$report_format" = "json" ]; then
+      printf '{}\n'
+      exit 0
+    fi
     cat <<'EOF'
 | Library             | Severity | Installed Version | Fixed Version | Details          |
 | stdlib              | Critical | 1.0               | 1.1           | CVE-0001         |

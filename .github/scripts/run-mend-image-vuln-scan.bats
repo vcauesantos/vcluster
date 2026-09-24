@@ -14,7 +14,7 @@ teardown() {
   rm -rf "$TEST_TMPDIR"
 }
 
-@test "exports Mend table counts after a successful uploaded scan" {
+@test "exports Mend terminal-table counts after a successful scan" {
   export FAKE_MEND_RESULT=findings
 
   run "$BATS_TEST_DIRNAME/run-mend-image-vuln-scan.sh"

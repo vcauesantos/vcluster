@@ -200,7 +200,7 @@ jobs:
             | SentinelOne | Source dependencies | `${{ needs.s1-shift-left-cli.outputs.source-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.source-vuln-outcome || needs.s1-shift-left-cli.result }}` |
             | SentinelOne | Container image | `${{ needs.s1-shift-left-cli.outputs.image-scan-completed == 'true' && 'completed' || 'scanner error' }}` |
             | Snyk | Container image | `${{ needs.snyk-container-scan.outputs.scanner-error == 'false' && 'completed' || 'scanner error' }}` |
-            | Mend | Container image | `${{ needs.mend-container-scan.outputs.scan-completed == 'true' && 'completed and published to Mend' || 'scanner error' }}` |
+            | Mend | Container image | `${{ needs.mend-container-scan.outputs.scan-completed == 'true' && 'completed; UI publication requested' || 'scanner error' }}` |
 
             ## Container results and counting models
 
@@ -213,7 +213,7 @@ jobs:
             |---------|---------------:|-------------------------:|---------------------------|
             | SentinelOne | ${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }} | ${{ needs.s1-shift-left-cli.outputs.image-unique-id-count || 'n/a' }} | Package-level finding instances: ${{ needs.s1-shift-left-cli.outputs.image-go-finding-count || 'n/a' }} compiled-Go and ${{ needs.s1-shift-left-cli.outputs.image-os-finding-count || 'n/a' }} OS-package instances; the OS rows represent ${{ needs.s1-shift-left-cli.outputs.image-os-unique-id-count || 'n/a' }} unique IDs. |
             | Snyk | ${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }} | Not exposed by the current adapter | Snyk-reported findings after its own normalization. |
-            | Mend | ${{ needs.mend-container-scan.outputs.total-count || 'n/a' }} | Not yet normalized | Vulnerability rows reported by the Mend CLI; the detailed results are published to the configured Mend scope. |
+            | Mend | ${{ needs.mend-container-scan.outputs.total-count || 'n/a' }} | Not yet normalized | Vulnerability rows in the Mend CLI terminal table; the CLI also requests publication to the configured Mend organization. |
 
             SentinelOne's Go/OS split is a reporting heuristic based on package coordinates in its
             CLI table. Snyk and Mend do not currently expose the same breakdown to this workflow.

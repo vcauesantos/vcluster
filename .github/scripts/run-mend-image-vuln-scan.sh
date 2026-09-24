@@ -3,18 +3,14 @@
 set -eu
 
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
-: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 : "${TARGET_IMAGE:?TARGET_IMAGE is required}"
 
 mend_cli_bin="${MEND_CLI_BIN:-mend}"
 scan_log="$(mktemp)"
-report_file="$RUNNER_TEMP/mend-image-results.json"
 trap 'rm -f "$scan_log"' EXIT HUP INT TERM
 
 set +e
 "$mend_cli_bin" image "$TARGET_IMAGE" \
-  --format json \
-  --filename "$report_file" \
   --non-interactive \
   --show vuln \
   --skip-security-checks secret >"$scan_log" 2>&1
@@ -23,7 +19,7 @@ set -e
 
 cat "$scan_log"
 
-if [ "$scanner_exit_code" -eq 0 ] && [ -s "$report_file" ]; then
+if [ "$scanner_exit_code" -eq 0 ]; then
   {
     echo "scan-completed=true"
     echo "scanner-exit-code=$scanner_exit_code"
@@ -63,9 +59,5 @@ fi
   echo "low-count=n/a"
   echo "total-count=n/a"
 } >> "$GITHUB_OUTPUT"
-
-if [ "$scanner_exit_code" -eq 0 ]; then
-  exit 1
-fi
 
 exit "$scanner_exit_code"
