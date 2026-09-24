@@ -28,6 +28,8 @@ teardown() {
   grep -qx 'low-count=0' "$GITHUB_OUTPUT"
   grep -qx 'unknown-count=1' "$GITHUB_OUTPUT"
   grep -qx 'total-count=5' "$GITHUB_OUTPUT"
+  grep -qx 'unique-id-count=5' "$GITHUB_OUTPUT"
+  grep -qx 'normalized-ids=CVE-1001,CVE-1002,CVE-1003,CVE-1004,GHSA-AAAA-BBBB-CCCC' "$GITHUB_OUTPUT"
 }
 
 @test "preserves Mend scanner errors without publishing partial counts" {
@@ -44,4 +46,6 @@ teardown() {
   grep -qx 'low-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'unknown-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'total-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'unique-id-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'normalized-ids=' "$GITHUB_OUTPUT"
 }

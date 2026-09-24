@@ -38,6 +38,7 @@ jobs:
       image-go-finding-count: ${{ steps.image-vuln-scanner.outputs.go-finding-count }}
       image-os-finding-count: ${{ steps.image-vuln-scanner.outputs.os-finding-count }}
       image-os-unique-id-count: ${{ steps.image-vuln-scanner.outputs.os-unique-id-count }}
+      image-normalized-ids: ${{ steps.image-vuln-scanner.outputs.normalized-ids }}
     container:
       image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06 # 1.0.4
       options: --entrypoint ""
@@ -126,8 +127,16 @@ jobs:
       medium-count: ${{ steps.snyk-scan.outputs.medium-count }}
       low-count: ${{ steps.snyk-scan.outputs.low-count }}
       total-count: ${{ steps.snyk-scan.outputs.threshold-count }}
+      unique-id-count: ${{ steps.snyk-ids.outputs.unique-id-count }}
+      normalized-ids: ${{ steps.snyk-ids.outputs.normalized-ids }}
+      ids-available: ${{ steps.snyk-ids.outcome == 'success' }}
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
       - name: Scan container image with Snyk
         id: snyk-scan
         uses: loft-sh/github-actions/.github/actions/cve-scan@cve-scan/v1 # zizmor: ignore[unpinned-uses] -- internal loft-sh action, pinned by its rolling action-specific tag
@@ -137,6 +146,13 @@ jobs:
           block-on-findings: false
           notify: false
           scanner-token: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Normalize Snyk vulnerability identifiers
+        id: snyk-ids
+        if: steps.snyk-scan.outputs.scanner-error == 'false' && steps.snyk-scan.outputs.sarif-path != ''
+        env:
+          SNYK_SARIF_PATH: ${{ steps.snyk-scan.outputs.sarif-path }}
+        run: .github/scripts/extract-snyk-vulnerability-ids.sh
 
   mend-container-scan:
     name: Mend container image scan
@@ -155,6 +171,8 @@ jobs:
       low-count: ${{ steps.mend-scan.outputs.low-count }}
       unknown-count: ${{ steps.mend-scan.outputs.unknown-count }}
       total-count: ${{ steps.mend-scan.outputs.total-count }}
+      unique-id-count: ${{ steps.mend-scan.outputs.unique-id-count }}
+      normalized-ids: ${{ steps.mend-scan.outputs.normalized-ids }}
 
     steps:
       - name: Check out repository
@@ -185,6 +203,11 @@ jobs:
       contents: read
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
       - name: Write comparison summary
         env:
           SUMMARY: |
@@ -213,14 +236,14 @@ jobs:
             | Scanner | Reported total | Unique vulnerability IDs | What the total represents |
             |---------|---------------:|-------------------------:|---------------------------|
             | SentinelOne | ${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }} | ${{ needs.s1-shift-left-cli.outputs.image-unique-id-count || 'n/a' }} | Package-level finding instances: ${{ needs.s1-shift-left-cli.outputs.image-go-finding-count || 'n/a' }} compiled-Go and ${{ needs.s1-shift-left-cli.outputs.image-os-finding-count || 'n/a' }} OS-package instances; the OS rows represent ${{ needs.s1-shift-left-cli.outputs.image-os-unique-id-count || 'n/a' }} unique IDs. |
-            | Snyk | ${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }} | Not exposed by the current adapter | Snyk-reported findings after its own normalization. |
-            | Mend | ${{ needs.mend-container-scan.outputs.total-count || 'n/a' }} | Not yet normalized | Vulnerability rows in the Mend CLI terminal table; the CLI also requests publication to the configured Mend organization. |
+            | Snyk | ${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.unique-id-count || 'n/a' }} | Snyk-reported findings; standard aliases are extracted from its normalized SARIF, with Snyk rule IDs used only when no CVE/GHSA is available. |
+            | Mend | ${{ needs.mend-container-scan.outputs.total-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.unique-id-count || 'n/a' }} | Vulnerability rows in the Mend CLI terminal table; the CLI also requests publication to the configured Mend organization. |
 
             SentinelOne's Go/OS split is a reporting heuristic based on package coordinates in its
-            CLI table. Snyk and Mend do not currently expose the same breakdown to this workflow.
-            Therefore, these totals must not be used to claim that one scanner detected more than
-            another. A detection comparison requires matching vulnerability IDs and affected
-            package ecosystems across all three scanners.
+            CLI table. Snyk and Mend do not currently expose the same package-ecosystem breakdown
+            to this workflow. Therefore, these totals must not be used to claim that one scanner
+            detected more than another. The normalized identifier overlap below supports a closer
+            detection comparison, but still does not normalize vendor severity or suppression policy.
 
             ## Raw severity totals (not normalized)
 
@@ -235,3 +258,14 @@ jobs:
 
             See the individual job logs, SentinelOne console, and Mend UI for scanner-specific details.
         run: printf '%s\n' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare normalized vulnerability identifiers
+        if: >-
+          needs.s1-shift-left-cli.outputs.image-scan-completed == 'true' &&
+          needs.snyk-container-scan.outputs.ids-available == 'true' &&
+          needs.mend-container-scan.outputs.scan-completed == 'true'
+        env:
+          S1_IDS: ${{ needs.s1-shift-left-cli.outputs.image-normalized-ids }}
+          SNYK_IDS: ${{ needs.snyk-container-scan.outputs.normalized-ids }}
+          MEND_IDS: ${{ needs.mend-container-scan.outputs.normalized-ids }}
+        run: .github/scripts/write-scanner-overlap-summary.sh

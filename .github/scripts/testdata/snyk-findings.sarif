@@ -1,0 +1,34 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "rules": [
+            {
+              "id": "SNYK-ALPINE-TEST-1",
+              "properties": {
+                "identifiers": ["CVE-2026-1001"]
+              }
+            },
+            {
+              "id": "SNYK-GOLANG-TEST-2",
+              "help": {
+                "markdown": "Tracked as GHSA-AAAA-BBBB-CCCC."
+              }
+            },
+            {
+              "id": "SNYK-NO-STANDARD-ALIAS"
+            }
+          ]
+        }
+      },
+      "results": [
+        {"ruleId": "SNYK-ALPINE-TEST-1"},
+        {"ruleIndex": 1, "message": {"text": "GHSA-aaaa-bbbb-cccc"}},
+        {"ruleId": "SNYK-NO-STANDARD-ALIAS"},
+        {"ruleId": "SNYK-ALPINE-TEST-1"}
+      ]
+    }
+  ]
+}

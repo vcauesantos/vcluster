@@ -58,6 +58,20 @@ if grep -q 'RESULT.*Scan completed' "$scan_log"; then
     }
   ' "$scan_log" >> "$GITHUB_OUTPUT"
 
+  normalized_ids="$(awk -F '|' '
+    NF >= 4 {
+      id=$2
+      severity=tolower($3)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", id)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", severity)
+      if ((severity == "critical" || severity == "high" || severity == "medium" || severity == "low") &&
+          id ~ /^(CVE|GHSA|SNYK)-/) {
+        print toupper(id)
+      }
+    }
+  ' "$scan_log" | LC_ALL=C sort -u | paste -sd, -)"
+  echo "normalized-ids=$normalized_ids" >> "$GITHUB_OUTPUT"
+
   exit 0
 fi
 
@@ -73,6 +87,7 @@ fi
   echo "go-finding-count=n/a"
   echo "os-finding-count=n/a"
   echo "os-unique-id-count=n/a"
+  echo "normalized-ids="
 } >> "$GITHUB_OUTPUT"
 
 if [ "$scanner_exit_code" -eq 0 ]; then

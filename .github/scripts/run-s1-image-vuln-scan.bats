@@ -29,6 +29,7 @@ teardown() {
   grep -qx 'go-finding-count=3' "$GITHUB_OUTPUT"
   grep -qx 'os-finding-count=4' "$GITHUB_OUTPUT"
   grep -qx 'os-unique-id-count=3' "$GITHUB_OUTPUT"
+  grep -qx 'normalized-ids=CVE-0001,CVE-0002,CVE-0003,CVE-0004,CVE-0005,CVE-0006' "$GITHUB_OUTPUT"
 }
 
 @test "preserves scanner errors as failures with unavailable counts" {
@@ -48,4 +49,5 @@ teardown() {
   grep -qx 'go-finding-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'os-finding-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'os-unique-id-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'normalized-ids=' "$GITHUB_OUTPUT"
 }

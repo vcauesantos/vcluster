@@ -74,6 +74,24 @@ if [ "$scanner_exit_code" -eq 0 ]; then
     }
   ' "$scan_log" >> "$GITHUB_OUTPUT"
 
+  normalized_ids="$(awk -F '|' '
+    {
+      for (field = 1; field <= NF; field++) {
+        value=$field
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        if (value ~ /^(CVE|GHSA|SNYK)-/) {
+          print toupper(value)
+          break
+        }
+      }
+    }
+  ' "$scan_log" | LC_ALL=C sort -u | paste -sd, -)"
+  unique_id_count="$(printf '%s\n' "$normalized_ids" | awk -F, '{ print ($0 == "" ? 0 : NF) }')"
+  {
+    echo "unique-id-count=$unique_id_count"
+    echo "normalized-ids=$normalized_ids"
+  } >> "$GITHUB_OUTPUT"
+
   exit 0
 fi
 
@@ -86,6 +104,8 @@ fi
   echo "low-count=n/a"
   echo "unknown-count=n/a"
   echo "total-count=n/a"
+  echo "unique-id-count=n/a"
+  echo "normalized-ids="
 } >> "$GITHUB_OUTPUT"
 
 exit "$scanner_exit_code"
