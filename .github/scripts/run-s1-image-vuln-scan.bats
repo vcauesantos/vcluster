@@ -25,6 +25,10 @@ teardown() {
   grep -qx 'medium-count=1' "$GITHUB_OUTPUT"
   grep -qx 'low-count=3' "$GITHUB_OUTPUT"
   grep -qx 'total-count=7' "$GITHUB_OUTPUT"
+  grep -qx 'unique-id-count=6' "$GITHUB_OUTPUT"
+  grep -qx 'go-finding-count=3' "$GITHUB_OUTPUT"
+  grep -qx 'os-finding-count=4' "$GITHUB_OUTPUT"
+  grep -qx 'os-unique-id-count=3' "$GITHUB_OUTPUT"
 }
 
 @test "preserves scanner errors as failures with unavailable counts" {
@@ -40,4 +44,8 @@ teardown() {
   grep -qx 'medium-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'low-count=n/a' "$GITHUB_OUTPUT"
   grep -qx 'total-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'unique-id-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'go-finding-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'os-finding-count=n/a' "$GITHUB_OUTPUT"
+  grep -qx 'os-unique-id-count=n/a' "$GITHUB_OUTPUT"
 }

@@ -19,7 +19,7 @@ concurrency:
 jobs:
   s1-shift-left-cli:
     name: SentinelOne scans (advisory)
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -34,6 +34,10 @@ jobs:
       image-medium-count: ${{ steps.image-vuln-scanner.outputs.medium-count }}
       image-low-count: ${{ steps.image-vuln-scanner.outputs.low-count }}
       image-total-count: ${{ steps.image-vuln-scanner.outputs.total-count }}
+      image-unique-id-count: ${{ steps.image-vuln-scanner.outputs.unique-id-count }}
+      image-go-finding-count: ${{ steps.image-vuln-scanner.outputs.go-finding-count }}
+      image-os-finding-count: ${{ steps.image-vuln-scanner.outputs.os-finding-count }}
+      image-os-unique-id-count: ${{ steps.image-vuln-scanner.outputs.os-unique-id-count }}
     container:
       image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06 # 1.0.4
       options: --entrypoint ""
@@ -108,7 +112,7 @@ jobs:
 
   snyk-container-scan:
     name: Snyk container image scan
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:
@@ -134,10 +138,47 @@ jobs:
           notify: false
           scanner-token: ${{ secrets.SNYK_TOKEN }}
 
+  mend-container-scan:
+    name: Mend container image scan
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      scan-outcome: ${{ steps.mend-scan.outcome }}
+      scan-completed: ${{ steps.mend-scan.outputs.scan-completed }}
+      scanner-exit-code: ${{ steps.mend-scan.outputs.scanner-exit-code }}
+      critical-count: ${{ steps.mend-scan.outputs.critical-count }}
+      high-count: ${{ steps.mend-scan.outputs.high-count }}
+      medium-count: ${{ steps.mend-scan.outputs.medium-count }}
+      low-count: ${{ steps.mend-scan.outputs.low-count }}
+      total-count: ${{ steps.mend-scan.outputs.total-count }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install verified Mend CLI
+        run: .github/scripts/setup-mend-cli.sh
+
+      - name: Scan container image with Mend and publish to Mend
+        id: mend-scan
+        continue-on-error: true
+        env:
+          MEND_URL: ${{ secrets.MEND_URL }}
+          MEND_EMAIL: ${{ secrets.MEND_EMAIL }}
+          MEND_USER_KEY: ${{ secrets.MEND_USER_KEY }}
+          MEND_ORGANIZATION: ${{ secrets.MEND_ORGANIZATION }}
+          MEND_BASE_DIR: ${{ runner.temp }}/mend-home
+        run: .github/scripts/run-mend-image-vuln-scan.sh
+
   consolidate-results:
     name: Consolidated scan summary
     if: always()
-    needs: [s1-shift-left-cli, snyk-container-scan]
+    needs: [s1-shift-left-cli, snyk-container-scan, mend-container-scan]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -159,18 +200,36 @@ jobs:
             | SentinelOne | Source dependencies | `${{ needs.s1-shift-left-cli.outputs.source-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.source-vuln-outcome || needs.s1-shift-left-cli.result }}` |
             | SentinelOne | Container image | `${{ needs.s1-shift-left-cli.outputs.image-scan-completed == 'true' && 'completed' || 'scanner error' }}` |
             | Snyk | Container image | `${{ needs.snyk-container-scan.outputs.scanner-error == 'false' && 'completed' || 'scanner error' }}` |
+            | Mend | Container image | `${{ needs.mend-container-scan.outputs.scan-completed == 'true' && 'completed and published to Mend' || 'scanner error' }}` |
 
-            ## Container vulnerability comparison
+            ## Container results and counting models
 
-            | Severity | SentinelOne | Snyk |
-            |----------|------------:|-----:|
-            | Critical | ${{ needs.s1-shift-left-cli.outputs.image-critical-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.critical-count || 'n/a' }} |
-            | High | ${{ needs.s1-shift-left-cli.outputs.image-high-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} |
-            | Medium | ${{ needs.s1-shift-left-cli.outputs.image-medium-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} |
-            | Low | ${{ needs.s1-shift-left-cli.outputs.image-low-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} |
-            | **Total** | **${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }}** | **${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }}** |
+            > **The reported totals are not directly comparable and are not a scanner-quality
+            > score.** The tools use different dependency discovery, deduplication, vulnerability
+            > databases, severity mappings, and suppression policies. A higher total does not by
+            > itself mean that a scanner detected more distinct vulnerabilities.
 
-            Counts are scanner-reported results for the same immutable image digest. Differences
-            can reflect vulnerability databases, package detection, severity mappings, and
-            suppression policies. See the individual job logs and SentinelOne console for details.
+            | Scanner | Reported total | Unique vulnerability IDs | What the total represents |
+            |---------|---------------:|-------------------------:|---------------------------|
+            | SentinelOne | ${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }} | ${{ needs.s1-shift-left-cli.outputs.image-unique-id-count || 'n/a' }} | Package-level finding instances: ${{ needs.s1-shift-left-cli.outputs.image-go-finding-count || 'n/a' }} compiled-Go and ${{ needs.s1-shift-left-cli.outputs.image-os-finding-count || 'n/a' }} OS-package instances; the OS rows represent ${{ needs.s1-shift-left-cli.outputs.image-os-unique-id-count || 'n/a' }} unique IDs. |
+            | Snyk | ${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }} | Not exposed by the current adapter | Snyk-reported findings after its own normalization. |
+            | Mend | ${{ needs.mend-container-scan.outputs.total-count || 'n/a' }} | Not yet normalized | Vulnerability rows reported by the Mend CLI; the detailed results are published to the configured Mend scope. |
+
+            SentinelOne's Go/OS split is a reporting heuristic based on package coordinates in its
+            CLI table. Snyk and Mend do not currently expose the same breakdown to this workflow.
+            Therefore, these totals must not be used to claim that one scanner detected more than
+            another. A detection comparison requires matching vulnerability IDs and affected
+            package ecosystems across all three scanners.
+
+            ## Raw severity totals (not normalized)
+
+            | Severity | SentinelOne instances | Snyk findings | Mend rows |
+            |----------|----------------------:|--------------:|----------:|
+            | Critical | ${{ needs.s1-shift-left-cli.outputs.image-critical-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.critical-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.critical-count || 'n/a' }} |
+            | High | ${{ needs.s1-shift-left-cli.outputs.image-high-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.high-count || 'n/a' }} |
+            | Medium | ${{ needs.s1-shift-left-cli.outputs.image-medium-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.medium-count || 'n/a' }} |
+            | Low | ${{ needs.s1-shift-left-cli.outputs.image-low-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} | ${{ needs.mend-container-scan.outputs.low-count || 'n/a' }} |
+            | **Total** | **${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }}** | **${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }}** | **${{ needs.mend-container-scan.outputs.total-count || 'n/a' }}** |
+
+            See the individual job logs, SentinelOne console, and Mend UI for scanner-specific details.
         run: printf '%s\n' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
