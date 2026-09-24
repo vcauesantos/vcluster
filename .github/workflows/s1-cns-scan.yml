@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  TARGET_IMAGE: ghcr.io/loft-sh/vcluster-oss@sha256:7327a764bbb077df8efe7500196aad3c4488ab5e5c05b327d240430baa3acf52
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -89,11 +92,9 @@ jobs:
       - name: Run Container Image Vulnerability Scanner
         id: image-vuln-scanner
         continue-on-error: true
-        env:
-          CONTAINER_IMAGE: ghcr.io/loft-sh/vcluster-oss@sha256:7327a764bbb077df8efe7500196aad3c4488ab5e5c05b327d240430baa3acf52
         run: >-
           s1-cns-cli scan vuln
-          --docker-image "$CONTAINER_IMAGE"
+          --docker-image "$TARGET_IMAGE"
 
       - name: Check for failures
         if: >-
@@ -102,3 +103,22 @@ jobs:
           steps.vuln-scanner.outcome == 'failure' ||
           steps.image-vuln-scanner.outcome == 'failure'
         run: exit 1
+
+  snyk-container-scan:
+    name: Snyk container image scan
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Scan container image with Snyk
+        id: snyk-scan
+        uses: loft-sh/github-actions/.github/actions/cve-scan@cve-scan/v1 # zizmor: ignore[unpinned-uses] -- internal loft-sh action, pinned by its rolling action-specific tag
+        with:
+          image-ref: ${{ env.TARGET_IMAGE }}
+          severity-threshold: low
+          block-on-findings: false
+          notify: false
+          scanner-token: ${{ secrets.SNYK_TOKEN }}
