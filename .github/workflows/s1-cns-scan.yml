@@ -86,9 +86,19 @@ jobs:
         continue-on-error: true
         run: s1-cns-cli scan vuln -d "$PWD"
 
+      - name: Run Container Image Vulnerability Scanner
+        id: image-vuln-scanner
+        continue-on-error: true
+        env:
+          CONTAINER_IMAGE: ghcr.io/loft-sh/vcluster-oss:sha256-7327a764bbb077df8efe7500196aad3c4488ab5e5c05b327d240430baa3acf52
+        run: >-
+          s1-cns-cli scan vuln
+          --docker-image "$CONTAINER_IMAGE"
+
       - name: Check for failures
         if: >-
           steps.secret-detector.outcome == 'failure' ||
           steps.iac-scanner.outcome == 'failure' ||
-          steps.vuln-scanner.outcome == 'failure'
+          steps.vuln-scanner.outcome == 'failure' ||
+          steps.image-vuln-scanner.outcome == 'failure'
         run: exit 1
