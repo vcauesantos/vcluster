@@ -27,6 +27,13 @@ jobs:
       iac-outcome: ${{ steps.iac-scanner.outcome }}
       source-vuln-outcome: ${{ steps.vuln-scanner.outcome }}
       image-vuln-outcome: ${{ steps.image-vuln-scanner.outcome }}
+      image-scan-completed: ${{ steps.image-vuln-scanner.outputs.scan-completed }}
+      image-scanner-exit-code: ${{ steps.image-vuln-scanner.outputs.scanner-exit-code }}
+      image-critical-count: ${{ steps.image-vuln-scanner.outputs.critical-count }}
+      image-high-count: ${{ steps.image-vuln-scanner.outputs.high-count }}
+      image-medium-count: ${{ steps.image-vuln-scanner.outputs.medium-count }}
+      image-low-count: ${{ steps.image-vuln-scanner.outputs.low-count }}
+      image-total-count: ${{ steps.image-vuln-scanner.outputs.total-count }}
     container:
       image: pingsafe/s1-shift-left-cli@sha256:1bceb426867bd3389fcff6174d06e6bfee23f029903d8d006a52444e12867c06 # 1.0.4
       options: --entrypoint ""
@@ -97,9 +104,7 @@ jobs:
       - name: Run Container Image Vulnerability Scanner
         id: image-vuln-scanner
         continue-on-error: true
-        run: >-
-          s1-cns-cli scan vuln
-          --docker-image "$TARGET_IMAGE"
+        run: .github/scripts/run-s1-image-vuln-scan.sh
 
   snyk-container-scan:
     name: Snyk container image scan
@@ -116,6 +121,7 @@ jobs:
       high-count: ${{ steps.snyk-scan.outputs.high-count }}
       medium-count: ${{ steps.snyk-scan.outputs.medium-count }}
       low-count: ${{ steps.snyk-scan.outputs.low-count }}
+      total-count: ${{ steps.snyk-scan.outputs.threshold-count }}
 
     steps:
       - name: Scan container image with Snyk
@@ -151,21 +157,20 @@ jobs:
             | SentinelOne | Secrets | `${{ needs.s1-shift-left-cli.outputs.secret-outcome || needs.s1-shift-left-cli.result }}` |
             | SentinelOne | IaC | `${{ needs.s1-shift-left-cli.outputs.iac-outcome || needs.s1-shift-left-cli.result }}` |
             | SentinelOne | Source dependencies | `${{ needs.s1-shift-left-cli.outputs.source-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.source-vuln-outcome || needs.s1-shift-left-cli.result }}` |
-            | SentinelOne | Container image | `${{ needs.s1-shift-left-cli.outputs.image-vuln-outcome == 'failure' && 'non-zero — findings or scan error' || needs.s1-shift-left-cli.outputs.image-vuln-outcome || needs.s1-shift-left-cli.result }}` |
-            | Snyk | Container image | `${{ needs.snyk-container-scan.outputs.scan-outcome || needs.snyk-container-scan.result }}` |
-            | Snyk | Scanner error | `${{ needs.snyk-container-scan.outputs.scanner-error || 'n/a' }}` |
-            | Snyk | Findings at threshold | `${{ needs.snyk-container-scan.outputs.has-vulnerabilities || 'n/a' }}` |
+            | SentinelOne | Container image | `${{ needs.s1-shift-left-cli.outputs.image-scan-completed == 'true' && 'completed' || 'scanner error' }}` |
+            | Snyk | Container image | `${{ needs.snyk-container-scan.outputs.scanner-error == 'false' && 'completed' || 'scanner error' }}` |
 
-            ## Snyk container findings
+            ## Container vulnerability comparison
 
-            | Severity | Count |
-            |----------|-------|
-            | Critical | ${{ needs.snyk-container-scan.outputs.critical-count || 'n/a' }} |
-            | High | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} |
-            | Medium | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} |
-            | Low | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} |
+            | Severity | SentinelOne | Snyk |
+            |----------|------------:|-----:|
+            | Critical | ${{ needs.s1-shift-left-cli.outputs.image-critical-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.critical-count || 'n/a' }} |
+            | High | ${{ needs.s1-shift-left-cli.outputs.image-high-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.high-count || 'n/a' }} |
+            | Medium | ${{ needs.s1-shift-left-cli.outputs.image-medium-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.medium-count || 'n/a' }} |
+            | Low | ${{ needs.s1-shift-left-cli.outputs.image-low-count || 'n/a' }} | ${{ needs.snyk-container-scan.outputs.low-count || 'n/a' }} |
+            | **Total** | **${{ needs.s1-shift-left-cli.outputs.image-total-count || 'n/a' }}** | **${{ needs.snyk-container-scan.outputs.total-count || 'n/a' }}** |
 
-            SentinelOne returns a non-zero exit code when some scanners find issues. CLI
-            outcomes do not represent finding counts and are advisory for this POV. See the
-            individual job logs and SentinelOne console for the detailed findings.
+            Counts are scanner-reported results for the same immutable image digest. Differences
+            can reflect vulnerability databases, package detection, severity mappings, and
+            suppression policies. See the individual job logs and SentinelOne console for details.
         run: printf '%s\n' "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
